@@ -41,6 +41,9 @@ public String getName() {
 public List<FPTerm> getTerms() {
     return params;
 }
-
+public FPTerm convertToTerm() {
+  // Convert the FPHead's name and parameters into an FPTerm
+  return new FPTerm(TKind.CTERM, name, new ArrayList<>(params));
+}
 
 }

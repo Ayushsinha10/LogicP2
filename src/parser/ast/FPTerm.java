@@ -1,7 +1,9 @@
 package parser.ast;
 
+import java.lang.reflect.Array;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Objects;
 
 import parser.ast.TKind;
 
@@ -64,7 +66,26 @@ public String getName() {
     return name;
 }
 
-public List<FPTerm> getTerms() {
+public ArrayList<FPTerm> getTerms() {
  return args;
 }
+    @Override
+    public boolean equals(Object obj) {
+        // Check for self-equality
+        if (this == obj) {
+            return true;
+        }
+
+        // Check if the object is of the same class
+        if (obj == null || getClass() != obj.getClass()) {
+            return false;
+        }
+
+        FPTerm other = (FPTerm) obj;
+
+        // Check if the kind, name, and arguments are equal
+        return kind == other.kind &&
+               Objects.equals(name, other.name) &&
+               Objects.equals(args, other.args);
+    }
 }

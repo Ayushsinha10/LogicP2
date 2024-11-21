@@ -1,0 +1,22 @@
+package interpreter;
+
+import parser.ast.*;
+import java.util.ArrayList;
+
+public class Headtoterm {
+
+    public static FPTerm convert(FPHead head) {
+        if (head == null) {
+            throw new IllegalArgumentException("FPHead cannot be null");
+        }
+
+        // Extract the name of the FPHead (functor)
+        String name = head.getName();
+
+        // Extract the parameters of the FPHead as terms
+        ArrayList<FPTerm> params = new ArrayList<>(head.getTerms());
+
+        // Create and return a new FPTerm representing the FPHead
+        return new FPTerm(TKind.CTERM, name, params);
+    }
+}
