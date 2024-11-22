@@ -6,7 +6,11 @@ import parser.ast.*;
 
 public class Interpreter {
     private final Map<String, List<FPClause>> knowledgeBase = new HashMap<>();
-    private Set<Map<String, FPTerm>> previousBindings = new HashSet<>();
+    private final Map<String, List<FPClause>> knowledgeBase2 = new HashMap<>();
+
+    private   Map<String, FPTerm> previousBinding = new HashMap<>();
+    private List<FPClause> btClause = new ArrayList<>();
+    private FPClause failure;
 
 
     private String lastPredicate;
@@ -37,36 +41,35 @@ public class Interpreter {
         knowledgeBase
             .computeIfAbsent(clause.getHead().getName(), k -> new ArrayList<>())
             .add(clause);
+            knowledgeBase2
+            .computeIfAbsent(clause.getHead().getName(), k -> new ArrayList<>())
+            .add(clause);
     }
 
     private void addRule(FPClause clause) {
         knowledgeBase
             .computeIfAbsent(clause.getHead().getName(), k -> new ArrayList<>())
             .add(clause);
+            knowledgeBase2
+            .computeIfAbsent(clause.getHead().getName(), k -> new ArrayList<>())
+            .add(clause);
     }
 
     private void evaluateQuery(FPBody query) {
+       
         if (query.getTerms().isEmpty()){
-            
-            Map<String, FPTerm> bindings = new HashMap<>();
-            boolean result = solvePredicateEmpty(lastPredicate, lastArguments, bindings);
 
-           if (result) {
-            //   System.out.println("Result: Yes");
-               if (!bindings.isEmpty()) {
-                   bindings.forEach((var, value) -> System.out.println(var + " = " + value));
-                  return;
-                   
-               }
-           } else {
-               System.out.println("Result: No");
-           }
+            if (!previousBinding.isEmpty()){
+           //     previousBinding.forEach((var, value) -> removeClause(var, value));
+            }
+            
          }
 
         
         for (FPTerm term : query.getTerms()) {
 
             String predicate = term.getName();
+           
             
            // System.out.println(term+"rt");
 
@@ -78,18 +81,25 @@ public class Interpreter {
             lastArguments = arguments;
             if(isVariable(arguments.get(0))){
                 Map<String, FPTerm> bindings = new HashMap<>();
-                boolean result = solvePredicate(predicate, arguments, bindings);
+               
+                boolean result = solvePredicate(predicate, arguments, bindings, null);
    
                if (result) {
+                   bindings.clear();
+                   bindings = Unifyer.getBinding();
                 //   System.out.println("Result: Yes");
                    if (!bindings.isEmpty()) {
+                      previousBinding = bindings;
+
                        bindings.forEach((var, value) -> System.out.println(var + " = " + value));
                       
                        return;
                    }
                } else {
-                   System.out.println("Result: No");
-                   return;
+                  knowledgeBase2.clear();
+                  knowledgeBase2.putAll(knowledgeBase);
+                  System.out.println("No!");
+                  return;
                }
 
             }
@@ -97,32 +107,40 @@ public class Interpreter {
 
       //      System.out.println("Query: " + predicate + "(" + String.join(", ", arguments) + ")");
             Map<String, FPTerm> bindings = new HashMap<>();
-             boolean result = solvePredicate(predicate, arguments, bindings);
+            // List<String> arguments2 = convertTermsToStrings(term.getTerms());
+             boolean result = solvePredicate(predicate, arguments, bindings, null);
 
             if (result) {
                 System.out.println("Result: Yes");
+                
                 if (!bindings.isEmpty()) {
                   //  bindings.forEach((var, value) -> System.out.println(var + " = " + value));
                 }
             } else {
+                knowledgeBase2.clear();
+                knowledgeBase2.putAll(knowledgeBase);
                 System.out.println("Result: No");
             }
         
         }
     }
+    private boolean solvePredicate(String predicate, ArrayList<FPTerm> arguments, Map<String, FPTerm> bindings, Map<String, List<FPClause>> kb) {
+        if (kb == null){
+            
+            
+            return solvePredicate2(predicate, arguments, bindings, knowledgeBase);
 
-    public void solve(String predicate, ArrayList<FPTerm> arguments) {
-        Map<String, FPTerm> bindings = new HashMap<>();
-        boolean result = solvePredicate(predicate, arguments, bindings);
-
-        if (!result) {
-            System.out.println("no");
+        }
+        else{
+            return solvePredicate2(predicate, arguments, bindings, knowledgeBase2);
         }
     }
+
     
-    private boolean solvePredicate(String predicate, ArrayList<FPTerm> arguments, Map<String, FPTerm> bindings) {
+    private boolean solvePredicate2(String predicate, ArrayList<FPTerm> arguments, Map<String, FPTerm> bindings, Map<String, List<FPClause>> kb) {
         // Retrieve the clauses for the given predicate from the knowledge base
-        List<FPClause> clauses = knowledgeBase.get(predicate);
+        List<FPClause> clauses = kb.get(predicate);
+      //  System.out.println(knowledgeBase);
     
         if (clauses == null) return false; // No clauses for this predicate
     
@@ -133,146 +151,80 @@ public class Interpreter {
   
         // Iterate over the clauses for the predicate
         for (FPClause clause : clauses) {
-            Map<String, FPTerm> newBindings = bindings;
-    
-            // Convert the head of the clause to an FPTerm (used for unification)
-            FPTerm headTerm = clause.getHead().convertToTerm();
+//System.out.println(Unifyer.getAttempted());
+           // System.out.println(clause);
+            btClause.add(clause);
             
-            // Create the query term using the provided arguments (already in FPTerm form)
-            FPTerm queryTerm = new FPTerm(TKind.CTERM, predicate, arguments);
-      
-    
-            // Check if this set of bindings has already been attempted
-    
-    
-            // Mark this set of bindings as attempted
-      
-    
-            // Attempt unification between the head of the clause and the query term
-            if (Unifyer.unify(headTerm, queryTerm, newBindings)) {
-                // If the body is null, it's a fact (success)
-                if (clause.getBody() == null) {
-                    bindings.putAll(newBindings);  // Add new bindings
-                    resultFound = true;
-                } else {
-                    // Otherwise, recursively evaluate the body (rule)
-                    if (evaluateBody(clause.getBody(), newBindings)) {
-                        bindings.putAll(newBindings);  // Add new bindings
-                        resultFound = true;
-                    }
-                }
-            }
-
-    
-            // If no solution was found, backtrack by restoring the bindings
-        }
-        return resultFound;
-        }
-
-    private boolean solvePredicateR(String predicate, ArrayList<FPTerm> arguments, Map<String, FPTerm> bindings, Set<Map<String, FPTerm>> bindings2) {
-        // Retrieve the clauses for the given predicate from the knowledge base
-        List<FPClause> clauses = knowledgeBase.get(predicate);
-    
-        if (clauses == null) return false; // No clauses for this predicate
-    
-        boolean resultFound = false;
-        
-        // Track previously attempted bindings to avoid revisiting the same state
-        Set<Map<String, FPTerm>> attemptedBindings = bindings2;
-        Stack<Map<String, FPTerm>> bindingStack = new Stack<>();
-    
-        // Iterate over the clauses for the predicate
-        for (FPClause clause : clauses) {
-            Map<String, FPTerm> newBindings = bindings;
-    
-            // Convert the head of the clause to an FPTerm (used for unification)
-            FPTerm headTerm = clause.getHead().convertToTerm();
-            
-            // Create the query term using the provided arguments (already in FPTerm form)
-            FPTerm queryTerm = new FPTerm(TKind.CTERM, predicate, arguments);
-            bindingStack.push(new HashMap<>(newBindings));
-    
-            // Check if this set of bindings has already been attempted
-            if (attemptedBindings.contains(newBindings)) {
-                continue; // Skip this clause as it leads to previously tried bindings
-            }
-    
-            // Mark this set of bindings as attempted
-            attemptedBindings.add(new HashMap<>(newBindings));
-    
-            // Attempt unification between the head of the clause and the query term
-            if (Unifyer.unify(headTerm, queryTerm, newBindings)) {
-                // If the body is null, it's a fact (success)
-                if (clause.getBody() == null) {
-                    bindings.putAll(newBindings);  // Add new bindings
-                    resultFound = true;
-                } else {
-                    // Otherwise, recursively evaluate the body (rule)
-                    if (evaluateBody(clause.getBody(), newBindings)) {
-                        bindings.putAll(newBindings);  // Add new bindings
-                        resultFound = true;
-                    }
-                }
-            }
-    
-            // If no solution was found, backtrack by restoring the bindings
-            if (!resultFound) {
-                System.out.println("Backtracking: Reverting to previous bindings.");
-                if (!bindingStack.isEmpty()) {
-                    bindings = bindingStack.pop();  // Restore previous bindings
-                }
-                return solvePredicateR(predicate, arguments, bindings,attemptedBindings);
-            }
-        }
-        return resultFound;
-        }  
-    private boolean solvePredicateEmpty(String predicate, ArrayList<FPTerm> arguments, Map<String, FPTerm> bindings) {
-        // Retrieve the clauses for the given predicate from the knowledge base
-        List<FPClause> clauses = knowledgeBase.get(predicate);
-        
-        if (clauses == null) return false; // No clauses for this predicate
-        
-        boolean resultFound = false;
-        
-        // Iterate over the clauses for the predicate
-        for (FPClause clause : clauses) {
-            // Create a fresh map of newBindings that will store bindings for this resolution attempt
             Map<String, FPTerm> newBindings = new HashMap<>(bindings);
-            
-            // Check if the new bindings conflict with the previous ones (skip if it does)
-            if (previousBindings.contains(newBindings)) {
-                continue; // Skip this clause as it leads to previously found bindings
-            }
-            
-            // Add newBindings to previousBindings so it can be ignored in future attempts
-            previousBindings.add(new HashMap<>(newBindings));  // Clone newBindings to avoid reference issues
-        
+
+    
             // Convert the head of the clause to an FPTerm (used for unification)
             FPTerm headTerm = clause.getHead().convertToTerm();
-        
+            
             // Create the query term using the provided arguments (already in FPTerm form)
             FPTerm queryTerm = new FPTerm(TKind.CTERM, predicate, arguments);
-        
+      
+    
+            // Check if this set of bindings has already been attempted
+    
+    
+            // Mark this set of bindings as attempted
+            Unifyer.markAttempted(newBindings);
+      
+            failure = clause;
             // Attempt unification between the head of the clause and the query term
             if (Unifyer.unify(headTerm, queryTerm, newBindings)) {
                 // If the body is null, it's a fact (success)
                 if (clause.getBody() == null) {
-                    
                     bindings.putAll(newBindings);  // Add new bindings
                     resultFound = true;
+                    return true;
                 } else {
                     // Otherwise, recursively evaluate the body (rule)
                     if (evaluateBody(clause.getBody(), newBindings)) {
-                       
                         bindings.putAll(newBindings);  // Add new bindings
                         resultFound = true;
+                        return true;
+                    }
+                    else{
+                        if(!btClause.isEmpty() && !areAllRules(btClause)){
+                            for(int i = 0; i < btClause.size();){
+                                if(!isRule(btClause.get(i))){
+                                    removeClause(btClause.get(i).getHead().getName(), btClause.get(i));
+                                    btClause.remove(i);
+                                    return solvePredicate(predicate, arguments, bindings, kb);
+
+                                    
+
+                                }
+                                else{
+                                    i++;
+                                }
+
+
+
+                            }
+                        }
+                       
+                       
                     }
                 }
             }
+           
+    
+            // If no solution was found, backtrack by restoring the bindings
         }
+        knowledgeBase2.clear();
+        knowledgeBase2.putAll(knowledgeBase);
+
+        return resultFound;
+        }
+
         
-        return resultFound;  // Return true if a solution was found, otherwise false
-    }
+
+
+  
+    
     
 
     private boolean evaluateBody(FPBody body, Map<String, FPTerm> bindings) {
@@ -309,7 +261,9 @@ public class Interpreter {
             }
     
             // Now pass the goal's name and converted arguments to solvePredicate
-            if (!solvePredicate(goal.getName(), goalArgs, bindings)) {
+            if (!solvePredicate(goal.getName(), goalArgs, bindings, knowledgeBase2)) {
+              //  System.out.println(failure);
+
                 return false; // If any subgoal fails, return false
             }
         }
@@ -325,54 +279,6 @@ public class Interpreter {
     }
     // Helper method to resolve a term based on current bindings
 
-    private boolean evaluateBodyWithBacktracking(FPBody body, Map<String, FPTerm> bindings) {
-        // Set to track attempted bindings to backtrack and retry the same subgoal with different bindings
-        Set<Map<String, FPTerm>> attemptedBindings = new HashSet<>();
-        
-        return evaluateSubgoalRecursive(body.getTerms(), bindings, 0, attemptedBindings);
-    }
-    
-    private boolean evaluateSubgoalRecursive(List<FPTerm> goals, Map<String, FPTerm> bindings, int goalIndex, Set<Map<String, FPTerm>> attemptedBindings) {
-        if (goalIndex >= goals.size()) {
-            // All goals have been successfully satisfied
-            return true;
-        }
-    
-        FPTerm goal = goals.get(goalIndex);
-        
-        // Clone the current bindings to avoid modifying them directly
-        Map<String, FPTerm> newBindings = new HashMap<>(bindings);
-    
-        // Convert goal arguments (which are FPTerms) to a new ArrayList of FPTerms
-        ArrayList<FPTerm> goalArgs = new ArrayList<>();
-        for (FPTerm arg : goal.getTerms()) {
-            goalArgs.add(new FPTerm(arg.getKind(), arg.getName(), arg.getTerms()));
-        }
-    
-        // Check if we've already tried these bindings for this goal
-        if (attemptedBindings.contains(newBindings)) {
-            // If the bindings have already been attempted, backtrack by trying the next set of bindings
-            return evaluateSubgoalRecursive(goals, bindings, goalIndex + 1, attemptedBindings);
-        }
-    
-        // Mark this set of bindings as attempted
-        attemptedBindings.add(new HashMap<>(newBindings));
-    
-        // Attempt to solve the goal (subgoal) using solvePredicate
-        boolean goalSucceeded = solvePredicate(goal.getName(), goalArgs, newBindings);
-    
-        if (goalSucceeded) {
-            // If the subgoal is successful, recursively try the next goal in the body
-            bindings.putAll(newBindings);  // Update the original bindings with new ones
-            return evaluateSubgoalRecursive(goals, bindings, goalIndex + 1, attemptedBindings); // Move to the next goal
-        } else {
-            // If the subgoal fails, backtrack by restoring the previous bindings
-            System.out.println("Backtracking: Goal " + goal.getName() + " failed, restoring previous bindings.");
-            
-            // Try the next alternative set of bindings for the current goal
-            return evaluateSubgoalRecursive(goals, bindings, goalIndex, attemptedBindings);
-        }
-    }
     // Format and output the result for queries with variables
     private String formatResult(Map<String, FPTerm> bindings) {
         StringBuilder sb = new StringBuilder();
@@ -407,6 +313,37 @@ public class Interpreter {
         }
         return result;
     }
+    private boolean areAllRules(List<FPClause> clauses) {
+        for (FPClause clause : clauses) {
+            // A clause is a rule if it has both a head and a non-null body
+            if (clause.getHead() == null || clause.getBody() == null) {
+                return false; // Found a clause that is not a rule
+            }
+        }
+        return true; // All clauses are rules
+    }
+    private boolean isRule(FPClause clause) {
+        // A rule must have both a head and a non-null body
+        return clause.getHead() != null && clause.getBody() != null;
+    }
 
+    private boolean removeClause(String key, FPClause clause) {
+        // Get the list of clauses for the given key
+        List<FPClause> clauseList = knowledgeBase2.get(key);
+    
+        if (clauseList != null) {
+            // Remove the clause from the list
+            boolean removed = clauseList.remove(clause);
+    
+            // If the list is now empty, remove the key from the map entirely
+            if (clauseList.isEmpty()) {
+                knowledgeBase2.remove(key);
+            }
+    
+            return removed;
+        }
+    
+        return false; // Key not found or clause not in list
+    }
 
 }
