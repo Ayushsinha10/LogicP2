@@ -213,9 +213,9 @@ public class Interpreter {
            
     
             // If no solution was found, backtrack by restoring the bindings
+            
         }
-        knowledgeBase2.clear();
-        knowledgeBase2.putAll(knowledgeBase);
+        
 
         return resultFound;
         }
@@ -344,6 +344,12 @@ public class Interpreter {
         }
     
         return false; // Key not found or clause not in list
+    }
+    public  void restoreKnowledgeBase() {
+        knowledgeBase2.clear();
+        for (String key : knowledgeBase.keySet()) {
+            knowledgeBase2.put(key, new ArrayList<>(knowledgeBase.get(key)));
+        }
     }
 
 }
