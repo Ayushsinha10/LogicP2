@@ -7,14 +7,30 @@ import parser.ast.*;
 public class Interpreter {
     private final Map<String, List<FPClause>> knowledgeBase = new HashMap<>();
     private final Map<String, List<FPClause>> knowledgeBase2 = new HashMap<>();
+    private FPClause firstClause = null;
+    private boolean trace;
+    private boolean fail = false;
+    private boolean redo = false;
+    private boolean check = false;
+    private boolean rule = false;
 
     private   Map<String, FPTerm> previousBinding = new HashMap<>();
     private List<FPClause> btClause = new ArrayList<>();
+    private List<FPClause> removedbtClause = new ArrayList<>();
+    private List<String> writings = new ArrayList<>();
+    
     private FPClause failure;
+    private FPClause current;
+    private FPTerm arg1;
 
 
     private String lastPredicate;
     private ArrayList<FPTerm> lastArguments;
+
+    public Interpreter(boolean trace){
+        this.trace = trace;
+
+    }
 
 
 
@@ -31,7 +47,13 @@ public class Interpreter {
             } else if (clause.getBody() != null) {
                 // Query: Evaluate and print results.
                // System.out.println(clause.getBody());
+               if(!clause.getBody().getTerms().isEmpty()){
+                arg1 = clause.getBody().getTerms().get(0);
+               }
+              // arg1 = clause.getBody().getTerms().get(0);
                 evaluateQuery(clause.getBody());
+              //  System.out.println( clause.getBody().getTerms().getFirst());
+                
                 
             }
         }
@@ -60,7 +82,51 @@ public class Interpreter {
         if (query.getTerms().isEmpty()){
 
             if (!previousBinding.isEmpty()){
-           //     previousBinding.forEach((var, value) -> removeClause(var, value));
+             //  removeClause(firstClause.getHead().getName(), firstClause);
+               Map<String, FPTerm> bindings = new HashMap<>();
+              // System.out.println(lastPredicate);
+              // System.out.println(firstClause);
+              // redo = true;
+               check = true;
+               boolean result = btCheck(lastPredicate, lastArguments);
+
+             
+               if (result) {
+              //  firstClause = null;
+                knowledgeBase2.clear();
+                knowledgeBase2.putAll(knowledgeBase);
+                bindings.clear();
+                bindings = Unifyer.getBinding();
+                if(trace){
+                    System.out.println();
+                }
+                
+                outWritings();
+              //  System.out.println();
+             //   System.out.println("Result: Yes");
+                if (!bindings.isEmpty()) {
+                   previousBinding = bindings;
+
+                    printBindings(bindings);
+                   
+                    return;
+                }
+            } else {
+                if(trace){
+                    System.out.println();
+                }
+                outWritings();
+              //  System.out.println();
+                removedbtClause.clear();
+                firstClause = null;
+                btClause.clear();
+               knowledgeBase2.clear();
+               knowledgeBase2.putAll(knowledgeBase);
+               outWritings();
+               System.out.println("no");
+               return;
+            }
+
             }
             
          }
@@ -83,22 +149,40 @@ public class Interpreter {
                 Map<String, FPTerm> bindings = new HashMap<>();
                
                 boolean result = solvePredicate(predicate, arguments, bindings, null);
+
    
                if (result) {
+              //  firstClause = null;
+                knowledgeBase2.clear();
+                knowledgeBase2.putAll(knowledgeBase);
                    bindings.clear();
                    bindings = Unifyer.getBinding();
+                   
+                   if(trace){
+                    System.out.println();
+                }
+                   outWritings();
+               //    System.out.println();
+                   
                 //   System.out.println("Result: Yes");
                    if (!bindings.isEmpty()) {
                       previousBinding = bindings;
-
-                       bindings.forEach((var, value) -> System.out.println(var + " = " + value));
+                      printBindings(bindings);
                       
                        return;
                    }
                } else {
+                if(trace){
+                    System.out.println();
+                }
+                  outWritings();
+
+                  removedbtClause.clear();
+                  firstClause = null;
                   knowledgeBase2.clear();
                   knowledgeBase2.putAll(knowledgeBase);
-                  System.out.println("No!");
+                  outWritings();
+                  System.out.println("no");
                   return;
                }
 
@@ -111,15 +195,32 @@ public class Interpreter {
              boolean result = solvePredicate(predicate, arguments, bindings, null);
 
             if (result) {
-                System.out.println("Result: Yes");
-                
+                if(trace){
+                System.out.println();
+
+                }
+
+                outWritings();
+
+                System.out.println("yes");
+                //System.out.println(current);
+
                 if (!bindings.isEmpty()) {
                   //  bindings.forEach((var, value) -> System.out.println(var + " = " + value));
                 }
-            } else {
+            } 
+            else {
+                if(trace){
+                   System.out.println("Fail: "+arg1);
+                    System.out.println();
+
+                }
+                outWritings();
+              //  System.out.println();
                 knowledgeBase2.clear();
                 knowledgeBase2.putAll(knowledgeBase);
-                System.out.println("Result: No");
+      
+                System.out.println("no");
             }
         
         }
@@ -143,7 +244,7 @@ public class Interpreter {
       //  System.out.println(knowledgeBase);
     
         if (clauses == null) return false; // No clauses for this predicate
-    
+        
         boolean resultFound = false;
         
         // Track previously attempted bindings to avoid revisiting the same state
@@ -153,7 +254,16 @@ public class Interpreter {
         for (FPClause clause : clauses) {
 //System.out.println(Unifyer.getAttempted());
            // System.out.println(clause);
+           current = clause;
+           if(current.isRule()){
+            rule = true;
+
+           }
+
             btClause.add(clause);
+            if (firstClause == null && !clause.isRule()){
+                firstClause = clause;
+            }
             
             Map<String, FPTerm> newBindings = new HashMap<>(bindings);
 
@@ -176,17 +286,32 @@ public class Interpreter {
             if (Unifyer.unify(headTerm, queryTerm, newBindings)) {
                 // If the body is null, it's a fact (success)
                 if (clause.getBody() == null) {
+                    if(trace && !rule){
+                        String curr = current.toString();
+                    
+                        curr = curr.replaceAll("\\s", "");
+                        curr = curr.substring(0, curr.length() - 1);
+                        
+                       
+    
+                       System.out.println("Call: "+curr);
+                    }
+
                     bindings.putAll(newBindings);  // Add new bindings
                     resultFound = true;
                     return true;
                 } else {
+   
                     // Otherwise, recursively evaluate the body (rule)
-                    if (evaluateBody(clause.getBody(), newBindings)) {
+
+                   
+                    if (evaluateBody(clause.getBody(), newBindings, clause)) {
                         bindings.putAll(newBindings);  // Add new bindings
                         resultFound = true;
                         return true;
                     }
                     else{
+                        failure = clause;
                         if(!btClause.isEmpty() && !areAllRules(btClause)){
                             for(int i = 0; i < btClause.size();){
                                 if(!isRule(btClause.get(i))){
@@ -208,10 +333,11 @@ public class Interpreter {
                        
                        
                     }
+
                 }
             }
-           
-    
+
+            //System.out.println(bindings);
             // If no solution was found, backtrack by restoring the bindings
             
         }
@@ -225,11 +351,23 @@ public class Interpreter {
 
   
     
-    
+    private void outWritings(){
+        if(!writings.isEmpty()){
 
-    private boolean evaluateBody(FPBody body, Map<String, FPTerm> bindings) {
+        for(int i = 0; i < writings.size(); i++){
+            System.out.println(writings.get(i));
+        }
+        System.out.println();
+
+        writings.clear();
+    }
+
+    }
+
+    private boolean evaluateBody(FPBody body, Map<String, FPTerm> bindings, FPClause clause) {
         // Recursively evaluate each subgoal (term) in the body
-        
+         
+
         for (FPTerm goal : body.getTerms()) {
             // If the goal is a "write" predicate, handle it as a side effect
             Map<String, FPTerm> bindings2 = bindings;
@@ -245,7 +383,11 @@ public class Interpreter {
                 String output = resolveTerm(termToWrite, bindings2).toString();
     
                 // Print the result
-                System.out.println(output);
+                if(trace){
+                System.out.println("Call: write("+output+")");
+                }
+                //System.out.println(output);
+                writings.add(output);
     
                 // Print the result
                 
@@ -262,11 +404,61 @@ public class Interpreter {
     
             // Now pass the goal's name and converted arguments to solvePredicate
             if (!solvePredicate(goal.getName(), goalArgs, bindings, knowledgeBase2)) {
+                
               //  System.out.println(failure);
+                if(trace){
+                System.out.print("Fail: "+goal.getName() + "(");
+                if(!bindings.isEmpty()){
+                    for (int i = 0; i < goalArgs.size(); i++){
+                        if (i == goalArgs.size() - 1){
+                            System.out.print(bindings.get(goalArgs.get(i).getName()));
+                            
+                        }
+                        else{
+                        System.out.print(bindings.get(goalArgs.get(i).getName()));
+                        System.out.print(","); 
+                        }
 
+                    }
+                    
+                }
+                System.out.print(")");
+                System.out.println();
+            }
+                redo = true;
                 return false; // If any subgoal fails, return false
             }
+            else{
+                if(trace && !isRule(current)){
+
+                    if(redo && !check){
+                    String curr = current.toString();
+                    
+                    curr = curr.replaceAll("\\s", "");
+                    curr = curr.substring(0, curr.length() - 1);
+                        
+
+                    System.out.println("Redo: "+curr);
+                    redo = false;
+                   }
+                   else if(!check){
+
+                    String curr = current.toString();
+                    
+                    curr = curr.replaceAll("\\s", "");
+                    curr = curr.substring(0, curr.length() - 1);
+                    
+                   
+
+                   System.out.println("Call: "+curr);
+                   }
+        
+                   
+               } 
+            }
+
         }
+        
         return true; // All subgoals in the body were successfully satisfied
     }
     private static FPTerm resolveTerm(FPTerm term, Map<String, FPTerm> bindings) {
@@ -333,6 +525,7 @@ public class Interpreter {
     
         if (clauseList != null) {
             // Remove the clause from the list
+            removedbtClause.add(clause);
             boolean removed = clauseList.remove(clause);
     
             // If the list is now empty, remove the key from the map entirely
@@ -351,5 +544,70 @@ public class Interpreter {
             knowledgeBase2.put(key, new ArrayList<>(knowledgeBase.get(key)));
         }
     }
+    public boolean btCheck(String lp, ArrayList<FPTerm> arguments){
+         redo = true;
 
-}
+        Map<String, FPTerm> bindings = new HashMap<>();
+        FPClause clause = firstClause;
+     //   System.out.println(removedbtClause.size());
+      //  System.out.println(removedbtClause.get(0));
+
+        for(int i = 0; i < removedbtClause.size(); i++){
+            //System.out.print("test");
+             //   System.out.println(removedbtClause);
+                removeClause(removedbtClause.get(i).getHead().getName(), removedbtClause.get(i));
+                removedbtClause.remove(i);
+             //   System.out.println(removedbtClause);
+                
+                
+            
+              
+              
+                
+        }
+       this.firstClause = null;
+
+        boolean result = solvePredicate(lp, arguments, bindings, knowledgeBase2);
+      //  System.out.println(previousBinding);
+      //  System.out.println(bindings);
+        check = false;
+
+        if (previousBinding.equals(bindings)){
+
+        
+        //    System.out.println("test");
+        //    System.out.println(clause);
+            removeClause(firstClause.getHead().getName(), firstClause);
+       //     System.out.println(knowledgeBase2);
+            bindings.clear();
+            result = solvePredicate(lp, arguments, bindings, knowledgeBase2);
+            return result;
+
+
+          
+        
+
+        }
+        return result;
+
+    }
+    private void printBindings(Map<String, FPTerm> bindings){
+        int size = bindings.size();
+        int count = 0;
+       // System.out.println();
+
+        for (Map.Entry<String, FPTerm> entry : bindings.entrySet()) {
+          count++;
+          String key = entry.getKey();
+          FPTerm value = entry.getValue();
+          if (count == size) {
+              System.out.print(key + " = " + value);
+              System.out.println();
+          } else {
+              System.out.print(key + " = " + value +", ");
+          }
+      }
+         }
+    }
+
+

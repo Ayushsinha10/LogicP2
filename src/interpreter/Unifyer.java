@@ -96,7 +96,7 @@ public class Unifyer {
     
             // Recursively unify corresponding subterms
             for (int i = 0; i < args1.size(); i++) {
-               System.out.println("Unifying subterm " + args1.get(i) + " with " + args2.get(i));
+           //    System.out.println("Unifying subterm " + args1.get(i) + " with " + args2.get(i));
                 if (!unify(args1.get(i), args2.get(i), bindings)) {
                   
                     return false; // If any subterm fails, the unification fails
@@ -125,7 +125,7 @@ public class Unifyer {
     
         // A variable cannot unify with itself (no self-binding)
         if (term.getName().equals(var)) {
-            System.out.println("Variable " + var + " cannot unify with itself.");
+     //       System.out.println("Variable " + var + " cannot unify with itself.");
             return false; // Prevent self-unification
         }
         if (resolveTerm(term, bindings).getName().equals(var)) {
@@ -133,7 +133,7 @@ public class Unifyer {
         }
     
         // Otherwise, bind the variable to the term
-         System.out.println("Binding variable " + var + " to " + term);
+     //    System.out.println("Binding variable " + var + " to " + term);
         bindings.put(var, term);
         return true;  // Successful binding
     }
